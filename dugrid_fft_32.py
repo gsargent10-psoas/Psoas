@@ -91,8 +91,8 @@ class MicrogridGAN() :
 
 			# Build the generator
 			print('-----------Generator Layers-------------')
-			#self.generator=self.build_modified_pix2pix_generator()
-			self.generator=load_model('%s%s'%(self.saveFolder,self.model),custom_objects={'tf': tf, 'm':m})
+			self.generator=self.build_modified_pix2pix_generator()
+			#self.generator=load_model('%s%s'%(self.saveFolder,self.model),custom_objects={'tf': tf, 'm':m})
 
 			img_output=Input(shape=self.output_img_shape)
 			img_input=Input(shape=self.input_img_shape)
@@ -271,7 +271,7 @@ class MicrogridGAN() :
 				ugrid_fft_img_imag = tf.cast(tf.math.imag(ugrid_fft_img),tf.float64)
 				ugrid_fft_img_cat = tf.concat([ugrid_fft_img_real,ugrid_fft_img_imag],2)
 				ugrid_fft_img_cat = tf.concat([ugrid_fft_img_cat,ugrid_fft_img_cat,ugrid_fft_img_cat],2)
-				input_img = tf.concat([input_img,tf.expand_dims(ugrid_fft_img_cat),axis=0)],0)
+				input_img = tf.concat([input_img,tf.expand_dims(ugrid_fft_img_cat,axis=0)],0)
 			
 				s0_fft_img_real = tf.cast(tf.math.real(s0_fft_img),tf.float64)			
 				s0_fft_img_imag = tf.cast(tf.math.imag(s0_fft_img),tf.float64)

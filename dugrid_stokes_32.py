@@ -53,7 +53,7 @@ class MicrogridGAN() :
 		self.output_channels=3
 		self.input_img_shape=(self.img_rows,self.img_cols,self.input_channels)
 		self.output_img_shape=(self.img_rows,self.img_cols,self.output_channels)
-		self.minibatchSize=2
+		self.minibatchSize=4
 		self.mode=mode
 		self.dataFolder=dataFolder
 		self.saveFolder=saveFolder
@@ -91,7 +91,7 @@ class MicrogridGAN() :
 
 			# Build the generator
 			print('-----------Generator Layers-------------')
-			#self.generator=self.build_modified_pix2pix_generator()
+			#self.generator=self.build_modified_pix2pix_generator_256()
 			self.generator=load_model('%s%s'%(self.saveFolder,self.model),custom_objects={'tf': tf, 'm':m})
 
 			img_output=Input(shape=self.output_img_shape)
@@ -160,7 +160,65 @@ class MicrogridGAN() :
 
 		return Model([img_output,img_input],validity)
 
-	def build_modified_pix2pix_generator(self) :
+	def build_modified_pix2pix_generator_256(self) :
+		def conv2d(layer_input,filters,fsize=4,bn=True,name='name me') :
+			layer_input=Lambda(HelperFunctions.pad4)(layer_input)
+			d = Conv2D(filters,kernel_size=fsize,strides=2,padding='valid',name=name)(layer_input)
+			d = LeakyReLU(alpha=0.2)(d)
+			if bn:
+				d=BatchNormalization(momentum=0.8)(d)
+			return d
+
+		def deconv2d(layer_input,skip_input,filters,fsize=4,dropout_rate=0,name='name me') : 
+			u=UpSampling2D(size=2)(layer_input)
+			u=Lambda(HelperFunctions.pad4)(u)
+			u=Conv2D(filters,kernel_size=fsize,strides=1,padding='valid',activation='relu',name=name)(u)
+			if dropout_rate:
+				u=Dropout(dropout_rate)(u)
+			u=BatchNormalization(momentum=0.8)(u)
+			u=Concatenate()([u,skip_input])
+			return u
+		
+		d0=Input(shape=self.input_img_shape)
+		print(d0.shape)
+
+		d1=conv2d(d0,self.gf,bn=False,name='gl1')
+		print('gl1',d1.shape)
+		d2=conv2d(d1,self.gf*2,bn=True,name='gl2')
+		print('gl2',d2.shape)
+		d3=conv2d(d2,self.gf*4,bn=True,name='gl3')
+		print('gl3',d3.shape)
+		d4=conv2d(d3,self.gf*8,bn=True,name='gl4')
+		print('gl4',d4.shape)
+		d5=conv2d(d4,self.gf*8,bn=True,name='gl5')
+		print('gl5',d5.shape)
+		d6=conv2d(d5,self.gf*8,bn=True,name='gl6')
+		print('gl6',d6.shape)
+		d7=conv2d(d6,self.gf*8,bn=True,name='gl7')
+		print('gl7',d7.shape)
+
+		u1=deconv2d(d7,d6,self.gf*8,name='gl8')
+		print('gl8',u1.shape)
+		u2=deconv2d(u1,d5,self.gf*8,name='gl9')
+		print('gl9',u2.shape)
+		u3=deconv2d(u2,d4,self.gf*8,name='gl10')
+		print('gl10',u3.shape)
+		u4=deconv2d(u3,d3,self.gf*4,name='gl11')
+		print('gl11',u4.shape)
+		u5=deconv2d(u4,d2,self.gf*2,name='gl12')
+		print('gl12',u5.shape)
+		u6=deconv2d(u5,d1,self.gf,name='gl13')
+		print('gl13',u6.shape)
+
+		u7=UpSampling2D(size=2)(u6)
+		print('u7 upsample',u7.shape)
+		u7=Lambda(HelperFunctions.pad4)(u7)
+		output_img=Conv2D(self.output_channels,kernel_size=4,strides=1,padding='valid',activation='tanh',name='gout')(u7)
+		print('gout',output_img.shape)
+		
+		return Model(d0,output_img)
+
+	def build_modified_pix2pix_generator_64(self) :
 		def conv2d(layer_input,filters,fsize=3,bn=True,name='name me') :
 			layer_input=Lambda(HelperFunctions.pad3)(layer_input)
 			d = Conv2D(filters,kernel_size=fsize,strides=2,padding='valid',name=name)(layer_input)
@@ -190,16 +248,16 @@ class MicrogridGAN() :
 		print(d3.shape)
 		d4=conv2d(d3,self.gf*8,bn=True,name='gl4')
 		print(d4.shape)
-		#d5=conv2d(d4,self.gf*8,bn=True,name='gl5')
-		#print(d5.shape)
+		d5=conv2d(d4,self.gf*8,bn=True,name='gl5')
+		print(d5.shape)
 
-		#u1=deconv2d(d5,d4,self.gf*8,name='gl6')
-		#print(u1.shape)
-		#u2=deconv2d(u1,d3,self.gf*4,name='gl7')
-		u2=deconv2d(d4,d3,self.gf*4,name='gl7')
+		u1=deconv2d(d5,d4,self.gf*8,name='gl6')
+		print(u1.shape)
+		u2=deconv2d(u1,d3,self.gf*4,name='gl7')
+		#u2=deconv2d(d4,d3,self.gf*4,name='gl7')
 		print(u2.shape)
-		#u3=deconv2d(u2,d2,self.gf*2,name='gl8')
 		u3=deconv2d(u2,d2,self.gf*2,name='gl8')
+		#u3=deconv2d(u2,d2,self.gf*2,name='gl8')
 		print(u3.shape)
 		u4=deconv2d(u3,d1,self.gf,name='gl9')
 		print(u4.shape)
@@ -369,11 +427,11 @@ class MicrogridGAN() :
 		b=12
 		plt.ion()
 		self.fgt = plt.figure()
-		self.fs0_gt = plt.imshow(np.random.rand(2048*2496).reshape((2048,2496)),cmap='gray')
+		self.fs0_gt = plt.imshow(np.random.rand(2048*2448).reshape((2048,2448)),cmap='gray')
 		plt.title('GT S0')
 		self.fgt.canvas.flush_events()
 		self.fgen = plt.figure()
-		self.fs0_gen = plt.imshow(np.random.rand(2048*2496).reshape((2048,2496)),cmap='gray')
+		self.fs0_gen = plt.imshow(np.random.rand(2048*2448).reshape((2048,2448)),cmap='gray')
 		plt.title('Gen S0')
 		self.fgen.canvas.flush_events()
 		for batch_i, (full_image,gt_img,ugrid_name,stokes_name) in enumerate(self.load_test_data()):
@@ -426,8 +484,8 @@ class MicrogridGAN() :
 							xe = full_image_cols-1
 							xs = xe - sub_image_cols+1
 							x = 2**16-1 
-							tmp = full_image[ys:ye+1,xs:xe+1]/x
-							sub_image[0,:,:,0] = tmp
+							tmp = tf.expand_dims(full_image[ys:ye+1,xs:xe+1]/x,axis=-1)
+							sub_image[0,:,:,:] = tf.concat([tmp,tmp,tmp],2).numpy()
 							gen_image[:,:,:,:] = self.generator.predict(sub_image)
 							stokes_image[ys:ye+1,xs:xe+1,0] = gen_image[0,:,:,0]
 							stokes_image[ys:ye+1,xs:xe+1,1] = gen_image[0,:,:,1]
@@ -441,8 +499,8 @@ class MicrogridGAN() :
 						xe = full_image_cols-1
 						xs = xe - sub_image_cols+1
 						x = 2**16-1  
-						tmp = full_image[ys:ye+1,xs:xe+1]/x
-						sub_image[0,:,:,0] = tmp
+						tmp = tf.expand_dims(full_image[ys:ye+1,xs:xe+1]/x,axis=-1)
+						sub_image[0,:,:,:] = tf.concat([tmp,tmp,tmp],2).numpy()
 						gen_image[:,:,:,:] = self.generator.predict(sub_image)
 						stokes_image[ys:ye+1,xs:xe+1,0] = gen_image[0,:,:,0]
 						stokes_image[ys:ye+1,xs:xe+1,1] = gen_image[0,:,:,1]
@@ -451,8 +509,8 @@ class MicrogridGAN() :
 							breakoutflag=1
 						break
 					x = 2**16-1 
-					tmp = full_image[ys:ye+1,xs:xe+1]/x
-					sub_image[0,:,:,0] = tmp 
+					tmp = tf.expand_dims(full_image[ys:ye+1,xs:xe+1]/x,axis=-1)
+					sub_image[0,:,:,:] = tf.concat([tmp,tmp,tmp],2).numpy()
 					if (r==0):
 						if (c==0):
 							gen_image[:,:,:,:] = self.generator.predict(sub_image)
@@ -484,7 +542,7 @@ class MicrogridGAN() :
 					print('[Overlap %s]' % (str(b)))
 					print('[Processing Sub Images %d of %d]' % (count,row_iterations*col_iterations))
 					count = count + 1
-			stokes_image[:,:,0]=stokes_image[:,:,0]*(2**17-1)
+			stokes_image[:,:,0]=tf.clip_by_value(stokes_image[:,:,0]*(2**17-1),0,(2**17-1)).numpy()
 			stokes_image[:,:,1]=stokes_image[:,:,0]*stokes_image[:,:,1]
 			stokes_image[:,:,2]=stokes_image[:,:,0]*stokes_image[:,:,2]
 			save_name = '%sgenerated_in_ugrid_out_stokes_%s'	% (saveFolder,stokes_name)
@@ -504,11 +562,11 @@ if __name__ == '__main__':
 	saveFolder = '/app/data/results/'
 	modelFolder = '/app/data/results/'
 	#model='model_%d.h5'%(modelNumber)
-	model='model_stokes_test_32.h5'
+	model='model_stokes_32.h5'
 	comments = ''
 	
 	gan_train = MicrogridGAN(mode=1,dataFolder=dataFolder,saveFolder=saveFolder,modelFolder=modelFolder,model=model,comments=comments)
-	input('Press any key to continue...')
+	#input('Press any key to continue...')
 	#gan_train.test() #gan_test = MicrogridGAN(mode=2,dataFolder=dataFolder,saveFolder=saveFolder,modelFolder=modelFolder,model=model,comments=comments)
-	#gan_test = MicrogridGAN(mode=2,dataFolder=dataFolder,saveFolder=saveFolder,modelFolder=modelFolder,model=model,comments=comments)
+	gan_test = MicrogridGAN(mode=2,dataFolder=dataFolder,saveFolder=saveFolder,modelFolder=modelFolder,model=model,comments=comments)
 	input('Press any key to continue...')
